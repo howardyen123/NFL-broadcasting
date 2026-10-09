@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import streamlit as st
+import analytics
 
 MPH = 2.045454
 FL, FW = 120.0, 53.3
@@ -56,12 +57,17 @@ def load_tracking(path):
 def load_side():
     plays = pd.read_csv("plays.csv") if os.path.exists("plays.csv") else None
     players = pd.read_csv("players.csv") if os.path.exists("players.csv") else None
+    pff = pd.read_csv("pffScoutingData.csv") if os.path.exists("pffScoutingData.csv") else None
+    if pff is not None:
+        for c in ("gameId", "playId", "nflId"):
+            if c in pff.columns:
+                pff[c] = pd.to_numeric(pff[c], errors="coerce").astype("Int64")
     names = {}
     if players is not None:
         pid = pd.to_numeric(players["nflId"], errors="coerce").astype("Int64")
         col = "displayName" if "displayName" in players.columns else "name"
         names = dict(zip(pid, players[col]))
-    return plays, names
+    return plays, names, pff
 
 def label(nid, jersey, names):
     if nid in names and pd.notna(names[nid]):
@@ -232,7 +238,7 @@ def main():
     st.sidebar.header("Controls")
     track_file = st.sidebar.selectbox("Tracking file", files)
     t = load_tracking(track_file)
-    plays, names = load_side()
+    plays, names, pff = load_side()
 
     games = sorted(t["gameId"].dropna().unique().tolist())
     gid = st.sidebar.selectbox("Game", games)
@@ -277,7 +283,11 @@ def main():
     if info["desc"]:
         st.caption(info["desc"])
 
-    left, right = st.columns([3, 2])
+    tab_play, tab_analytics = st.tabs(["Play view", "Analytics"])
+    with tab_analytics:
+        analytics.render_tab(t, plays, pff, names, int(gid))
+    with tab_play:
+        left, right = st.columns([3, 2])
     with left:
         st.subheader("Play view")
         i = st.slider("Frame", 1, len(frames), 1)
